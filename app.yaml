@@ -1,0 +1,8 @@
+runtime: python39  # Используйте версию Python, которая вам подходит, например, python39
+
+entrypoint: python3 main.py  # Замените 'main.py' на файл, который запускает вашего бота
+
+instance_class: F2  # Это класс инстанса, можно настроить в зависимости от нужд
+
+env_variables:
+  BOT_TOKEN: "7858550751:AAHk7JyLrFp28wLObRSRgJ4IxwgJvWjpb-A"  # Например, токен для вашего ботаyour_telegram_token_here
