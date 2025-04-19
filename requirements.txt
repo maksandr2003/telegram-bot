@@ -3,3 +3,4 @@ schedule
 nest_asyncio
 aiogram
 python-dotenv
+aiohttp
