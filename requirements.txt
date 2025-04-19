@@ -1,4 +1,4 @@
-python-telegram-bot==20.6
+python-telegram-bot[rate-limiter]==20.6
 schedule
 nest_asyncio
 aiogram
