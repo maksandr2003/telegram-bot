@@ -129,10 +129,14 @@ async def send_video_to_user(user_id, context):
 
 # --- Обработка Telegram webhook запросов ---
 async def webhook_handler(request):
-    data = await request.json()
-    update = Update.de_json(data, bot.bot)
-    await app.process_update(update)
-    return web.Response()
+    try:
+        data = await request.json()
+        update = Update.de_json(data, bot.bot)
+        await app.process_update(update)
+        return web.Response()
+    except Exception as e:
+        logging.error(f"Ошибка в webhook_handler: {e}")
+        return web.Response(status=500)
 
 # --- Запуск ---
 async def main():
@@ -160,12 +164,11 @@ async def main():
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
 
-    print(f"Бот запущен на порту {port}...")
+    print(f"✅ Бот Telegram запущен на порту {port}, webhook активен.")
 
-    # Старт бота (нужно для работы .process_update)
+    # Старт бота
     await app.initialize()
     await app.start()
-    await app.updater.start_polling()  # пустой polling чтобы обрабатывать update через webhook
 
     # Ожидание завершения
     await asyncio.Event().wait()
