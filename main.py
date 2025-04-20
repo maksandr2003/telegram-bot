@@ -25,6 +25,7 @@ TOTAL_LESSONS = 7
 
 # Логирование
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # --- Работа с пользователями ---
 def load_users():
@@ -46,11 +47,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         users[user_id] = {'registered': False, 'current_lesson': 1, 'last_sent': 0, 'course_finished': False}
         save_users(users)
 
-    keyboard = [[InlineKeyboardButton("🚀 Начать обучение", callback_data='start_registration')]]
+    keyboard = [[InlineKeyboardButton("\ud83d\ude80 Начать обучение", callback_data='start_registration')]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(
-        "Привет! 👋 Добро пожаловать в твой персональный путь обучения по ИИ.\n\n"
-        "Хочешь расти и учиться — нажми на кнопку ниже, и мы начнём! 💡",
+        "Привет! \ud83d\udc4b Добро пожаловать в твой персональный путь обучения по ИИ.\n\n"
+        "Хочешь расти и учиться — нажми на кнопку ниже, и мы начнём! \ud83d\udca1",
         reply_markup=reply_markup
     )
 
@@ -97,7 +98,7 @@ async def send_video_to_user(user_id, context):
         users[user_id]['course_finished'] = True
         save_users(users)
         await context.bot.send_message(chat_id=int(user_id),
-            text="🎉 Поздравляю! Ты завершил весь курс. Это только начало большого пути! 🚀")
+            text="\ud83c\udf89 Поздравляю! Ты завершил весь курс. Это только начало большого пути! \ud83d\ude80")
         return
 
     video_path = os.path.join(VIDEO_FOLDER, f"lesson{lesson_number}.mp4")
@@ -132,7 +133,7 @@ async def webhook_handler(request):
     try:
         data = await request.json()
         update = Update.de_json(data, bot.bot)
-        await app.process_update(update)
+        await bot.process_update(update)
         return web.Response()
     except Exception as e:
         logging.error(f"Ошибка в webhook_handler: {e}")
@@ -140,20 +141,18 @@ async def webhook_handler(request):
 
 # --- Запуск ---
 async def main():
-    global app, bot
-    app = Application.builder().token(BOT_TOKEN).rate_limiter(AIORateLimiter()).build()
-    bot = app.bot
+    global bot
+    bot = Application.builder().token(BOT_TOKEN).rate_limiter(AIORateLimiter()).build()
 
-    # Устанавливаем handlers
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(handle_start_button, pattern="^start_registration$"))
-    app.add_handler(CallbackQueryHandler(gender_selected, pattern="^gender_"))
+    bot.add_handler(CommandHandler("start", start))
+    bot.add_handler(CallbackQueryHandler(handle_start_button, pattern="^start_registration$"))
+    bot.add_handler(CallbackQueryHandler(gender_selected, pattern="^gender_"))
 
-    # Устанавливаем webhook
-    await bot.delete_webhook()
-    await bot.set_webhook(WEBHOOK_URL)
+    await bot.initialize()
+    await bot.start()
+    await bot.bot.delete_webhook()
+    await bot.bot.set_webhook(WEBHOOK_URL)
 
-    # aiohttp сервер
     web_app = web.Application()
     web_app.router.add_post("/webhook", webhook_handler)
     web_app.router.add_get("/", lambda request: web.Response(text="Бот работает!"))
@@ -164,13 +163,7 @@ async def main():
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
 
-    print(f"✅ Бот Telegram запущен на порту {port}, webhook активен.")
-
-    # Старт бота
-    await app.initialize()
-    await app.start()
-
-    # Ожидание завершения
+    logger.info(f"✅ Бот Telegram запущен на порту {port}, webhook активен.")
     await asyncio.Event().wait()
 
 if __name__ == "__main__":
