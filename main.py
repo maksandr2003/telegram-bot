@@ -23,14 +23,11 @@ VIDEO_FOLDER = "videos"
 DATABASE_FILE = "users.json"
 TOTAL_LESSONS = 7
 
-# Логирование
 logging.basicConfig(level=logging.INFO)
 
-# Глобальные переменные
 users = {}
 application = None
 
-# --- Работа с пользователями ---
 def load_users():
     if os.path.exists(DATABASE_FILE):
         with open(DATABASE_FILE, 'r') as f:
@@ -43,7 +40,6 @@ def save_users(users):
 
 users = load_users()
 
-# --- /start ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
     if user_id not in users:
@@ -58,14 +54,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
 
-# --- Кнопка "Начать обучение" ---
 async def handle_start_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     await query.edit_message_text("Отлично! Давай сначала определим твой пол.")
     await gender(update, context)
 
-# --- Запрос пола ---
 async def gender(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [InlineKeyboardButton("Мужчина", callback_data='gender_male')],
@@ -77,7 +71,6 @@ async def gender(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
-# --- Обработка выбора пола ---
 async def gender_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = str(query.from_user.id)
@@ -90,7 +83,6 @@ async def gender_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text("Пол успешно выбран. Приступаем к первому уроку!")
     await send_video_to_user(user_id, context)
 
-# --- Отправка видео одному пользователю ---
 async def send_video_to_user(user_id, context):
     user_data = users.get(user_id)
     if not user_data or not user_data['registered'] or user_data.get('course_finished'):
@@ -131,7 +123,6 @@ async def send_video_to_user(user_id, context):
     else:
         logging.error(f"Файл не найден: {video_path}")
 
-# --- Обработка Telegram webhook запросов ---
 async def webhook_handler(request):
     try:
         data = await request.json()
@@ -143,21 +134,17 @@ async def webhook_handler(request):
         logging.error(f"Ошибка в webhook_handler: {e}")
         return web.Response(status=500)
 
-# --- Запуск ---
-async def main():
+async def init():
     global application
     application = Application.builder().token(BOT_TOKEN).rate_limiter(AIORateLimiter()).build()
 
-    # Устанавливаем handlers
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(handle_start_button, pattern="^start_registration$"))
     application.add_handler(CallbackQueryHandler(gender_selected, pattern="^gender_"))
 
-    # Устанавливаем webhook
     await application.bot.delete_webhook()
     await application.bot.set_webhook(WEBHOOK_URL)
 
-    # aiohttp сервер
     web_app = web.Application()
     web_app.router.add_post("/webhook", webhook_handler)
     web_app.router.add_get("/", lambda request: web.Response(text="Бот работает!"))
@@ -169,13 +156,3 @@ async def main():
     await site.start()
 
     logging.info(f"✅ Бот Telegram запущен на порту {port}, webhook активен.")
-
-    # Старт бота
-    await application.initialize()
-    await application.start()
-
-    # Ожидание завершения
-    await asyncio.Event().wait()
-
-if __name__ == "__main__":
-    asyncio.run(main())
