@@ -156,3 +156,14 @@ async def init():
     await site.start()
 
     logging.info(f"✅ Бот Telegram запущен на порту {port}, webhook активен.")
+
+    await application.initialize()
+    await application.start()
+
+def run():
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(init())
+    loop.run_forever()
+
+if __name__ == "__main__":
+    run()
