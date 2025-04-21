@@ -4,10 +4,10 @@ import time
 import logging
 import asyncio
 import random
-from datetime import datetime
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from aiohttp import web
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardRemove
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -23,6 +23,7 @@ WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 VIDEO_FOLDER = "videos"
 DATABASE_FILE = "users.json"
 TOTAL_LESSONS = 7
+SCHEDULE_HOUR = 10  # 10:00 утра по UTC
 
 logging.basicConfig(level=logging.INFO)
 
@@ -44,10 +45,14 @@ users = load_users()
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
     if user_id not in users:
-        users[user_id] = {'registered': False, 'current_lesson': 1, 'last_sent_date': '', 'course_finished': False}
+        users[user_id] = {
+            'registered': False,
+            'current_lesson': 1,
+            'last_sent': 0,
+            'course_finished': False,
+            'gender': None
+        }
         save_users(users)
-
-    await update.message.reply_text("Очищаю интерфейс...", reply_markup=ReplyKeyboardRemove())
 
     keyboard = [[InlineKeyboardButton("🚀 Начать обучение", callback_data='start_registration')]]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -91,12 +96,19 @@ async def send_video_to_user(user_id, context):
     if not user_data or not user_data['registered'] or user_data.get('course_finished'):
         return
 
+    now = datetime.utcnow()
+    last_sent_time = datetime.utcfromtimestamp(user_data.get('last_sent', 0))
+    if now.hour < SCHEDULE_HOUR or (now - last_sent_time) < timedelta(days=1):
+        return  # отправка только после 10 утра и не чаще 1 раза в день
+
     lesson_number = user_data['current_lesson']
     if lesson_number > TOTAL_LESSONS:
         users[user_id]['course_finished'] = True
         save_users(users)
-        await context.bot.send_message(chat_id=int(user_id),
-            text="🎉 Поздравляю! Ты завершил весь курс. Это только начало большого пути! 🚀")
+        await context.bot.send_message(
+            chat_id=int(user_id),
+            text="🎉 Поздравляю! Ты завершил весь курс. Это только начало большого пути! 🚀"
+        )
         return
 
     video_path = os.path.join(VIDEO_FOLDER, f"lesson{lesson_number}.mp4")
@@ -117,26 +129,19 @@ async def send_video_to_user(user_id, context):
             caption = f"Урок {lesson_number} — поехали!"
             await context.bot.send_message(chat_id=int(user_id), text=random.choice(messages))
             with open(video_path, 'rb') as video:
-                await context.bot.send_video(chat_id=int(user_id), video=video, caption=caption)
+                await context.bot.send_video(
+                    chat_id=int(user_id),
+                    video=video,
+                    caption=caption,
+                    protect_content=True
+                )
             users[user_id]['current_lesson'] += 1
-            users[user_id]['last_sent_date'] = datetime.utcnow().strftime('%Y-%m-%d')
+            users[user_id]['last_sent'] = int(time.time())
             save_users(users)
         except Exception as e:
             logging.error(f"Ошибка при отправке видео: {e}")
     else:
         logging.error(f"Файл не найден: {video_path}")
-
-async def check_and_send_lessons():
-    while True:
-        now = datetime.utcnow()
-        current_date = now.strftime('%Y-%m-%d')
-        if now.hour == 10:
-            for user_id, user_data in users.items():
-                if not user_data.get('registered') or user_data.get('course_finished'):
-                    continue
-                if user_data.get('last_sent_date') != current_date:
-                    await send_video_to_user(user_id, application.bot)
-        await asyncio.sleep(3600)
 
 async def webhook_handler(request):
     try:
@@ -174,8 +179,6 @@ async def init():
 
     await application.initialize()
     await application.start()
-
-    asyncio.create_task(check_and_send_lessons())
 
 def run():
     loop = asyncio.get_event_loop()
