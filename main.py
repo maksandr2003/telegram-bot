@@ -7,7 +7,7 @@ import random
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from aiohttp import web
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram import (Update, InlineKeyboardMarkup, InlineKeyboardButton, BotCommand, ChatPermissions)
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -23,7 +23,7 @@ WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 VIDEO_FOLDER = "videos"
 DATABASE_FILE = "users.json"
 TOTAL_LESSONS = 7
-SCHEDULE_HOUR = 10  # 10:00 утра по UTC
+SEND_HOUR = 10  # Устанавливаем время отправки (10:00 утра)
 
 logging.basicConfig(level=logging.INFO)
 
@@ -45,20 +45,14 @@ users = load_users()
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
     if user_id not in users:
-        users[user_id] = {
-            'registered': False,
-            'current_lesson': 1,
-            'last_sent': 0,
-            'course_finished': False,
-            'gender': None
-        }
+        users[user_id] = {'registered': False, 'current_lesson': 1, 'last_sent': 0, 'course_finished': False}
         save_users(users)
 
-    keyboard = [[InlineKeyboardButton("🚀 Начать обучение", callback_data='start_registration')]]
+    keyboard = [[InlineKeyboardButton("\ud83d\ude80 Начать обучение", callback_data='start_registration')]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(
-        "Привет! 👋 Добро пожаловать в твой персональный путь обучения по ИИ.\n\n"
-        "Хочешь расти и учиться — нажми на кнопку ниже, и мы начнём! 💡",
+        "Привет! \ud83d\udc4b Добро пожаловать в твой персональный путь обучения по ИИ.\n\n"
+        "Хочешь расти и учиться — нажми на кнопку ниже, и мы начнём! \ud83d\udca1",
         reply_markup=reply_markup
     )
 
@@ -96,19 +90,22 @@ async def send_video_to_user(user_id, context):
     if not user_data or not user_data['registered'] or user_data.get('course_finished'):
         return
 
-    now = datetime.utcnow()
-    last_sent_time = datetime.utcfromtimestamp(user_data.get('last_sent', 0))
-    if now.hour < SCHEDULE_HOUR or (now - last_sent_time) < timedelta(days=1):
-        return  # отправка только после 10 утра и не чаще 1 раза в день
+    # Проверка времени отправки
+    now = datetime.now()
+    if now.hour != SEND_HOUR:
+        return
+
+    # Проверка, был ли урок отправлен сегодня
+    last_sent = datetime.fromtimestamp(user_data['last_sent']) if user_data['last_sent'] else None
+    if last_sent and last_sent.date() == now.date():
+        return
 
     lesson_number = user_data['current_lesson']
     if lesson_number > TOTAL_LESSONS:
         users[user_id]['course_finished'] = True
         save_users(users)
-        await context.bot.send_message(
-            chat_id=int(user_id),
-            text="🎉 Поздравляю! Ты завершил весь курс. Это только начало большого пути! 🚀"
-        )
+        await context.bot.send_message(chat_id=int(user_id),
+            text="\ud83c\udf89 Поздравляю! Ты завершил весь курс. Это только начало большого пути! \ud83d\ude80")
         return
 
     video_path = os.path.join(VIDEO_FOLDER, f"lesson{lesson_number}.mp4")
@@ -129,12 +126,8 @@ async def send_video_to_user(user_id, context):
             caption = f"Урок {lesson_number} — поехали!"
             await context.bot.send_message(chat_id=int(user_id), text=random.choice(messages))
             with open(video_path, 'rb') as video:
-                await context.bot.send_video(
-                    chat_id=int(user_id),
-                    video=video,
-                    caption=caption,
-                    protect_content=True
-                )
+                await context.bot.send_video(chat_id=int(user_id), video=video, caption=caption,
+                                             supports_streaming=True, allow_sending_without_reply=True)
             users[user_id]['current_lesson'] += 1
             users[user_id]['last_sent'] = int(time.time())
             save_users(users)
@@ -154,6 +147,24 @@ async def webhook_handler(request):
         logging.error(f"Ошибка в webhook_handler: {e}")
         return web.Response(status=500)
 
+async def set_bot_commands(app):
+    await app.bot.set_my_commands([])  # Удаляем всё меню
+
+async def restrict_saving_permissions(user_id, context):
+    try:
+        await context.bot.restrict_chat_member(
+            chat_id=user_id,
+            user_id=user_id,
+            permissions=ChatPermissions(
+                can_send_messages=True,
+                can_send_media_messages=True,
+                can_send_other_messages=False,
+                can_add_web_page_previews=False
+            )
+        )
+    except Exception as e:
+        logging.warning(f"Не удалось ограничить права пользователя {user_id}: {e}")
+
 async def init():
     global application
     application = Application.builder().token(BOT_TOKEN).rate_limiter(AIORateLimiter()).build()
@@ -163,6 +174,7 @@ async def init():
     application.add_handler(CallbackQueryHandler(gender_selected, pattern="^gender_"))
 
     await application.bot.delete_webhook()
+    await set_bot_commands(application)
     await application.bot.set_webhook(WEBHOOK_URL)
 
     web_app = web.Application()
@@ -175,7 +187,7 @@ async def init():
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
 
-    logging.info(f"✅ Бот Telegram запущен на порту {port}, webhook активен.")
+    logging.info(f"\u2705 Бот Telegram запущен на порту {port}, webhook активен.")
 
     await application.initialize()
     await application.start()
