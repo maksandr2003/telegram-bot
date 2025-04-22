@@ -52,8 +52,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [[InlineKeyboardButton("\ud83d\ude80 Начать обучение", callback_data='start_registration')]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(
-        "Привет! \ud83d\udc4b Добро пожаловать в твой персональный путь обучения по ИИ.\n\n"
-        "Хочешь расти и учиться — нажми на кнопку ниже, и мы начнём! \ud83d\udca1",
+        "Привет! \U0001F44B Добро пожаловать в твой персональный путь обучения по ИИ.\n\n"
+        "Хочешь расти и учиться — нажми на кнопку ниже, и мы начнём! \U0001F4A1",
         reply_markup=reply_markup
     )
 
