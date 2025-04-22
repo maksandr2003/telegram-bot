@@ -5,16 +5,10 @@ import time
 import logging
 import asyncio
 import random
-from datetime import datetime
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from aiohttp import web
-from telegram import (
-    Update,
-    InlineKeyboardMarkup,
-    InlineKeyboardButton,
-    BotCommand,
-    ChatPermissions,
-)
+from telegram import (Update, InlineKeyboardMarkup, InlineKeyboardButton, BotCommand, ChatPermissions)
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -30,23 +24,24 @@ WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 VIDEO_FOLDER = "videos"
 DATABASE_FILE = "users.json"
 TOTAL_LESSONS = 7
-SEND_HOUR = 10
+SEND_HOUR = 10  # Устанавливаем время отправки (10:00 утра)
 
 logging.basicConfig(level=logging.INFO)
+
 users = {}
+application = None
 
 def load_users():
     if os.path.exists(DATABASE_FILE):
-        with open(DATABASE_FILE, "r") as f:
+        with open(DATABASE_FILE, 'r') as f:
             return json.load(f)
     return {}
 
 def save_users(users):
-    with open(DATABASE_FILE, "w") as f:
+    with open(DATABASE_FILE, 'w') as f:
         json.dump(users, f, indent=4)
 
 users = load_users()
-application = None
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
@@ -71,7 +66,7 @@ async def handle_start_button(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def gender(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [InlineKeyboardButton("Мужчина", callback_data='gender_male')],
-        [InlineKeyboardButton("Женщина", callback_data='gender_female')],
+        [InlineKeyboardButton("Женщина", callback_data='gender_female')]
     ]
     await context.bot.send_message(
         chat_id=update.effective_chat.id,
@@ -89,29 +84,24 @@ async def gender_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await query.answer()
     await query.edit_message_text("Пол успешно выбран. Приступаем к первому уроку!")
-    await send_video_to_user(user_id, context, force_send=True)
+    await send_video_to_user(user_id, context)
 
-async def send_video_to_user(user_id, context, force_send=False):
+async def send_video_to_user(user_id, context):
     user_data = users.get(user_id)
     if not user_data or not user_data['registered'] or user_data.get('course_finished'):
         return
 
     now = datetime.now()
-    if not force_send:
-        if now.hour != SEND_HOUR:
-            return
-        last_sent = datetime.fromtimestamp(user_data['last_sent']) if user_data['last_sent'] else None
-        if last_sent and last_sent.date() == now.date():
-            return
+    last_sent = datetime.fromtimestamp(user_data['last_sent']) if user_data['last_sent'] else None
+    if last_sent and last_sent.date() == now.date():
+        return
 
     lesson_number = user_data['current_lesson']
     if lesson_number > TOTAL_LESSONS:
         users[user_id]['course_finished'] = True
         save_users(users)
-        await context.bot.send_message(
-            chat_id=int(user_id),
-            text="🎉 Поздравляю! Ты завершил весь курс. Это только начало большого пути! 🚀"
-        )
+        await context.bot.send_message(chat_id=int(user_id),
+            text="🎉 Поздравляю! Ты завершил весь курс. Это только начало большого пути! 🚀")
         return
 
     video_path = os.path.join(VIDEO_FOLDER, f"lesson{lesson_number}.mp4")
@@ -146,6 +136,7 @@ async def webhook_handler(request):
     try:
         data = await request.json()
         update = Update.de_json(data, application.bot)
+        logging.info("Webhook получил новое обновление!")
         await application.update_queue.put(update)
         return web.Response()
     except Exception as e:
@@ -153,7 +144,7 @@ async def webhook_handler(request):
         return web.Response(status=500)
 
 async def set_bot_commands(app):
-    await app.bot.set_my_commands([])  # Очистка меню
+    await app.bot.set_my_commands([])
 
 async def restrict_saving_permissions(user_id, context):
     try:
@@ -169,6 +160,14 @@ async def restrict_saving_permissions(user_id, context):
         )
     except Exception as e:
         logging.warning(f"Не удалось ограничить права пользователя {user_id}: {e}")
+
+async def daily_lesson_scheduler():
+    while True:
+        now = datetime.now()
+        if now.hour == SEND_HOUR and now.minute == 0:
+            for user_id in users:
+                await send_video_to_user(user_id, application.bot)
+        await asyncio.sleep(60)
 
 async def init():
     global application
@@ -193,6 +192,8 @@ async def init():
     await site.start()
 
     logging.info(f"✅ Бот Telegram запущен на порту {port}, webhook активен.")
+
+    asyncio.create_task(daily_lesson_scheduler())
 
     await application.initialize()
     await application.start()
