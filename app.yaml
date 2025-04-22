@@ -5,4 +5,4 @@ entrypoint: python3 main.py  # Замените 'main.py' на файл, кот�
 instance_class: F2  # Это класс инстанса, можно настроить в зависимости от нужд
 
 env_variables:
-  BOT_TOKEN: "7858550751:AAHk7JyLrFp28wLObRSRgJ4IxwgJvWjpb-A"  # Например, токен для вашего ботаyour_telegram_token_here
+  BOT_TOKEN: "7858550751:AAHk7JyLrFp28wL0bRSRgJ4IxwgJvWjpb-A"  # Например, токен для вашего ботаyour_telegram_token_here
