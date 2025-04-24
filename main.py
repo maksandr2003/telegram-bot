@@ -122,6 +122,12 @@ async def send_video_to_user(user_id, context):
             with open(video_path, 'rb') as video:
                 await context.bot.send_video(chat_id=int(user_id), video=video, caption=caption,
                                              supports_streaming=True, allow_sending_without_reply=True)
+            
+            # Кнопка "Получить следующий урок"
+            keyboard = [[InlineKeyboardButton("📥 Получить следующий урок", callback_data='next_lesson')]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await context.bot.send_message(chat_id=int(user_id), text="Когда будешь готов — жми кнопку:", reply_markup=reply_markup)
+
             users[user_id]['current_lesson'] += 1
             users[user_id]['last_sent'] = int(time.time())
             save_users(users)
