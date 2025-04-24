@@ -50,8 +50,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         save_users(users)
 
     keyboard = [
-        [InlineKeyboardButton("🚀 Начать обучение", callback_data='start_registration')],
-        [InlineKeyboardButton("📹 Следующий урок", callback_data='next_lesson')]
+        [InlineKeyboardButton("🚀 Начать обучение", callback_data='start_registration')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(
