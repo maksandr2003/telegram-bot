@@ -49,7 +49,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         users[user_id] = {'registered': False, 'current_lesson': 1, 'last_sent': 0, 'course_finished': False}
         save_users(users)
 
-    keyboard = [[InlineKeyboardButton("🚀 Начать обучение", callback_data='start_registration')]]
+    keyboard = [
+        [InlineKeyboardButton("🚀 Начать обучение", callback_data='start_registration')],
+        [InlineKeyboardButton("📹 Следующий урок", callback_data='next_lesson')]
+    ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(
         "Привет! 👋 Добро пожаловать в твой персональный путь обучения по ИИ.\n\n"
@@ -91,11 +94,6 @@ async def send_video_to_user(user_id, context):
     if not user_data or not user_data['registered'] or user_data.get('course_finished'):
         return
 
-    now = datetime.now()
-    last_sent = datetime.fromtimestamp(user_data['last_sent']) if user_data['last_sent'] else None
-    if last_sent and last_sent.date() == now.date():
-        return
-
     lesson_number = user_data['current_lesson']
     if lesson_number > TOTAL_LESSONS:
         users[user_id]['course_finished'] = True
@@ -132,6 +130,12 @@ async def send_video_to_user(user_id, context):
     else:
         logging.error(f"Файл не найден: {video_path}")
 
+async def next_lesson_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    user_id = str(query.from_user.id)
+    await send_video_to_user(user_id, context)
+
 async def webhook_handler(request):
     try:
         data = await request.json()
@@ -162,7 +166,7 @@ async def restrict_saving_permissions(user_id, context):
         logging.warning(f"Не удалось ограничить права пользователя {user_id}: {e}")
 
 async def daily_lesson_scheduler():
-    while True:
+    while False:  # Отключили автоматическую рассылку
         now = datetime.now()
         if now.hour == SEND_HOUR and now.minute == 0:
             for user_id in users:
@@ -176,6 +180,7 @@ async def init():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(handle_start_button, pattern="^start_registration$"))
     application.add_handler(CallbackQueryHandler(gender_selected, pattern="^gender_"))
+    application.add_handler(CallbackQueryHandler(next_lesson_handler, pattern="^next_lesson$"))
 
     await application.bot.delete_webhook()
     await set_bot_commands(application)
